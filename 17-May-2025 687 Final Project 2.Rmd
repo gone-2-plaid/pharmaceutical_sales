@@ -1,0 +1,615 @@
+---
+title: "Final Project"
+output: html_document
+date: "2025-05-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setting up
+
+```{r cars}
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(readr)
+library(lubridate)
+
+# Load the Dataset
+salesMonthly <- read_csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesmonthly.csv")
+salesWeekly <- read_csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesweekly.csv")
+salesDaily <- read_csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesdaily.csv")
+salesHourly <- read_csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/saleshourly.csv")
+
+# Quick Peek(s)
+View(salesMonthly)
+View(salesWeekly)
+View(salesDaily)
+View(salesHourly)
+```
+
+## Initial Assumption(s)
+
+```{r}
+# Codes:
+  #M01AB - Anti-inflammatory and antirheumatic products, non-steroids, Acetic acid derivatives and related substances
+  #M01AE - Anti-inflammatory and antirheumatic products, non-steroids, Propionic acid derivatives
+  #N02BA - Other analgesics and antipyretics, Salicylic acid and derivatives
+  #N02BE/B - Other analgesics and antipyretics, Pyrazolones and Anilides
+  #N05B - Psycholeptics drugs, Anxiolytic drugs
+  #N05C - Psycholeptics drugs, Hypnotics and sedatives drugs
+  #R03 - Drugs for obstructive airway diseases
+  #R06 - Antihistamines for systemic use Sales data are resampled to the hourly, daily, weekly and monthly periods. Data is already pre-processed, where processing included outlier detection and treatment and missing data imputation.
+
+# Predictive Trends to Watch For
+  #R03 - peak in Spring/Summer
+    #R06 - peak in Fall/Winter
+  #N02BA, N02BE - painkillers hold stable
+  #M01AB, M01AE - anti-inflammatory, small increase during peak Flu season (Fall, Winter)
+  #N05B, N05C - Psycholeptics - stable with peaks during Winter, trending upwards over time
+```
+
+## Initial Prep
+
+```{r pressure, echo=FALSE}
+# Date Formatting
+salesMonthly <- salesMonthly %>%
+  mutate(
+    datum = as.Date(datum),
+    Month = month(datum, label = TRUE),
+    Year = year(datum),
+    Season = case_when(
+      Month %in% c("Dec", "Jan", "Feb") ~ "Winter",
+      Month %in% c("Mar", "Apr", "May") ~ "Spring",
+      Month %in% c("Jun", "Jul", "Aug") ~ "Summer",
+      Month %in% c("Sep", "Oct", "Nov") ~ "Fall"
+    )
+  )
+```
+
+
+## Seasonal Trends I - RO3, R06 - Respiratory Drugs
+
+```{r}
+# Plot Pivot
+seasonal_long <- salesMonthly %>%
+  select(datum, Season, R03, R06) %>%
+  pivot_longer(cols = c(R03, R06), names_to = "Drug", values_to = "Sales")
+
+# Plotting Averages
+seasonal_long %>%
+  group_by(Season, Drug) %>%
+  summarise(Average_Sales = mean(Sales, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = Season, y = Average_Sales, fill = Drug)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Seasonal Sales for Respiratory Drugs (R03, R06)",
+       x = "Season", y = "Average Monthly Sales") +
+  theme_minimal()
+
+# R06 - clear trends in Spring/Summer (likely from "allergy season")
+# R03 - clear spikes in "colder months" where respiratory infections and asthma triggering weather is more likely
+```
+
+## Seasonal Trends II - M01AB, M01AE - NSAIDs (Pain Management Drugs)
+
+```{r}
+# Plot Pivot
+seasonal_long <- salesMonthly %>%
+  select(datum, Season, M01AB, M01AE) %>%
+  pivot_longer(cols = c(M01AB, M01AE), names_to = "Drug", values_to = "Sales")
+
+# Plotting Averages
+seasonal_long %>%
+  group_by(Season, Drug) %>%
+  summarise(Average_Sales = mean(Sales, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = Season, y = Average_Sales, fill = Drug)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Seasonal Sales for NSAIDs (M01AB, M01AE)",
+       x = "Season", y = "Average Monthly Sales") +
+  theme_minimal()
+
+# M01AB - stable with a small peak in Summer, drop in Winter
+# M01AE - mild increase in Winter (Flu season)
+```
+
+## Seasonal Trends III - N02BA, N02BE - Salicylic acid derivatives, Anilides & Pyrazolones  (Fever/Pain Management Drugs)
+
+```{r}
+# Plot Pivot
+seasonal_long <- salesMonthly %>%
+  select(datum, Season, N02BA, N02BE) %>%
+  pivot_longer(cols = c(N02BA, N02BE), names_to = "Drug", values_to = "Sales")
+
+# Plotting Averages
+seasonal_long %>%
+  group_by(Season, Drug) %>%
+  summarise(Average_Sales = mean(Sales, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = Season, y = Average_Sales, fill = Drug)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Seasonal Sales for SA, Anilides & Pyrazolones (N02BA, N02BE)",
+       x = "Season", y = "Average Monthly Sales") +
+  theme_minimal()
+
+# Notable gap between purchase trends in amount compared between the two 
+# N02BA - low purchase trends throughout the year
+# N02BE - highest purchasing trends (of any drugs in this dataset) throughout the year with peaks in the Fall/Winter (Flu Season)
+```
+
+## Seasonal Trends IV - N05B, N05C - Psycholeptics – Anxiolytics, Hypnotics & Sedatives
+
+```{r}
+# Plot Pivot
+seasonal_long <- salesMonthly %>%
+  select(datum, Season, N05B, N05C) %>%
+  pivot_longer(cols = c(N05B, N05C), names_to = "Drug", values_to = "Sales")
+
+# Plotting Averages
+seasonal_long %>%
+  group_by(Season, Drug) %>%
+  summarise(Average_Sales = mean(Sales, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = Season, y = Average_Sales, fill = Drug)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Seasonal Sales for Psycholeptics – Anxiolytics, Hypnotics & Sedatives (N05B, N05C)",
+       x = "Season", y = "Average Monthly Sales") +
+  theme_minimal()
+
+# N05B - much higher steady trends with peak during fall - possibly related to holidays?
+# N05C - low steady trends throughout the year with a "slight" peak in winter
+```
+```{r}
+names(df)
+```
+
+```{r}
+#weekly regression = sleep aids
+lm_sleep <- lm(Sleep_Aids ~ factor(`Weekday.Name`) + factor(Month), data = df)
+summary(lm_sleep)
+```
+
+
+```{r}
+#weekly regression = anxiety meds
+lm_anxiety <- lm(N05B ~ factor(`Weekday.Name`) + factor(Month), data = df)
+summary(lm_anxiety)
+```
+
+```{r}
+#yearly regression = anxiety meds
+lm_anxiety2 <- lm(N05B ~ factor(`Month`) + factor(Year), data = df)
+summary(lm_anxiety2)
+```
+
+
+```{r}
+#Histogram, Summary, Table Analysis of NSAIDs
+hist(df$M01AB)
+
+sum(is.null(df$M01AB))
+
+table(df$M01AB)
+```
+
+```{r}
+#Sales Frequency Trends for Allergy Medications
+yt <- ts(df$R06, frequency = 365, start = c(2014,1,1))
+plot(yt)
+```
+
+```{r}
+#HoltWinters Forecast for Allergy Medications
+ts_forecast <- HoltWinters(yt, alpha=TRUE, 
+                            beta=FALSE, 
+                            gamma=TRUE)
+
+ts_forecast
+plot(ts_forecast)
+ts_forecast1 <- forecast(ts_forecast, h=100)
+plot(ts_forecast1)
+```
+```{r}
+#Arima Analysis of Allergy Medications
+y_diff <- diff(yt)
+plot(y_diff)
+acf(y_diff)
+```
+
+```{r}
+#Arima Analysis of Allergy Medications II
+y_ma <- arima(y_diff, order = c(0,0,1))
+plot(yt)
+lines(yt-y_ma$residuals, col="red")
+```
+
+```{r}
+#Forecast Trend Analysis for Allergy Medications
+d_n = forecast(y_ma, h = 1)
+y_next = d_n$mean + yt[length(yt)]
+y_next = as.numeric(y_next)
+y_next
+```
+
+```{r}
+#Arima Plot Comparison - Allergy Medications
+y_ma = arima(y_diff, order = c(0,0,1))
+y_ar = arima(y_diff, order = c(1,0,0))
+# plot the fitted series
+plot(yt)
+lines(yt-y_ma$residuals, col = "red")
+lines(yt-y_ar$residuals, col = "blue")
+```
+
+```{r}
+d_n = forecast(y_ar, h = 1)
+y_next = d_n$mean + yt[length(yt)]
+y_next = as.numeric(y_next)
+y_next
+## [1] 2.916789
+```
+
+```{r}
+ytM01AB <- ts(df$M01AB, frequency = 365, start = c(2014,1,1))
+
+ytM01AE <- ts(df$M01AE, frequency = 365, start = c(2014,1,1))
+
+ytN02BA <- ts(df$N02BA, frequency = 365, start = c(2014,1,1))
+
+ytN02BE <- ts(df$N02BE, frequency = 365, start = c(2014,1,1))
+
+ytN05B <- ts(df$N05B, frequency = 365, start = c(2014,1,1))
+
+ytN05C <- ts(df$Sleep_Aids, frequency = 365, start = c(2014,1,1))
+
+ytR03 <- ts(df$R03, frequency = 365, start = c(2014,1,1))
+
+ytR06 <- ts(df$R06, frequency = 365, start = c(2014,1,1))
+```
+
+```{r}
+plot(ytM01AB)
+plot(ytM01AE)
+plot(ytN02BA)
+plot(ytN02BE)
+plot(ytN05B)
+plot(ytN05C)
+plot(ytR03)
+plot(ytR06)
+```
+
+```{r}
+sapply(df,summary)
+```
+```{r}
+for (col in names(df)[2:9]) {
+  p <- ggplot(df, aes_string(x = col)) +
+    geom_histogram() +
+    labs(title = paste(col),
+         x = col)
+  
+  print(p)
+}
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(forecast)
+salesdaily <- read.csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesdaily.csv")
+df <- salesdaily
+```
+
+```{r}
+# Separating into two training and validation
+dfTrain <- df %>% slice(1:1825)
+dfValidate <- df %>% slice(1826:nrow(df))
+
+
+yt <- ts(dfTrain$R06, frequency = 365, start = c(2014,1,1))
+plot(yt)
+```
+
+```{r}
+#HoltWinters for Allergy Medications - Comparison before and after trainig the model
+ts_forecast <- HoltWinters(yt, alpha=TRUE, 
+                            beta=FALSE, 
+                            gamma=TRUE)
+
+ts_actual <- ts(dfValidate$R06, frequency = 365, start = c(2019,1,1))
+
+  
+ts_forecast1 <- forecast(ts_forecast, h=281)
+
+
+plot(ts_forecast1);lines(ts_actual, col = 2)
+
+difference <- ts_forecast1$mean - ts_actual
+mean(difference)
+```
+
+```{r}
+file_path <- "~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesdaily.csv"
+df<-read_csv(file_path)
+library(readr)
+library(tidyverse)
+df <- df %>%
+  rename(
+    Acetic_NSAIDs       = M01AB,
+    Propionic_NSAIDs    = M01AE,
+    Aspirin_Group       = N02BA,
+    Paracetamol_Group   = N02BE,
+    Anxiety_Drugs       = N05B,
+    Sleep_Aids          = N05C,
+    Asthma_Drugs        = R03,
+    Allergy_Meds        = R06
+  )
+
+df$datum <- lubridate::mdy(df$datum)
+glimpse(df)
+```
+```{r}
+#2. Mental Health Medication Usage Over Time
+
+df_long2 <- df %>%
+  select(datum, Anxiety_Drugs, Sleep_Aids) %>%
+  pivot_longer(-datum, names_to = "Drug_Type", values_to = "Sales")
+
+ggplot(df_long2, aes(x = datum, y = Sales, color = Drug_Type, group = Drug_Type)) +
+  geom_line(alpha = 0.8) +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
+  labs(title = "Daily Sales: Mental Health Medications", x = "Date", y = "Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+library(tidyverse)
+library(lubridate)
+
+df_long <- df %>%
+  select(datum, Acetic_NSAIDs, Propionic_NSAIDs, Aspirin_Group, Paracetamol_Group) %>%
+  pivot_longer(-datum, names_to = "Drug_Type", values_to = "Sales")
+
+ggplot(df_long, aes(x = datum, y = Sales, color = Drug_Type, group = Drug_Type)) +
+  geom_line(alpha = 0.8) +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
+  labs(title = "Trends of Pain Relief Drugs", x = "Date", y = "Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+1. Paracetamol (cyan line) dominates sales:
+It is consistently the highest-selling drug group over the entire period.
+
+Sales show seasonal spikes (e.g., visible in early 2015, 2016, 2017, and late 2018), likely during cold/flu seasons or other viral outbreaks.
+
+One large spike in early 2017 likely reflects a significant demand event — possibly due to a widespread illness or policy change.
+
+2. NSAIDs (Acetic & Propionic) and Aspirin_Group have:
+Lower but steady usage over time.
+
+No major upward or downward trend — usage remains fairly stable.
+
+These lines hover around a baseline, showing less seasonal variation than paracetamol.
+
+3. No major structural shifts over time:
+
+No medication shows a dramatic upward or downward long-term trend.
+
+Interpretation / Insights:
+Paracetamol sales show short-term bursts, while the others remain flat with minor fluctuations.
+
+Paracetamol appears to be the first-line pain/fever remedy for the population — likely due to OTC availability and broad usage.
+
+Spikes in Paracetamol_Group align with expected flu seasons (winter to early spring).
+
+NSAIDs and Aspirin may be more commonly used for chronic or inflammatory conditions, leading to steady, non-seasonal patterns.
+
+
+```{r}
+
+library(tidyverse)
+library(lubridate)
+library(readr)
+df <- read_csv("~/Desktop/Syracuse/IST 687/Pharma Sales (Kaggle)/salesdaily.csv", 
+               col_types = cols(datum = col_character()))
+df$datum <- mdy(df$datum)
+summary(df$datum)
+
+df$Month <- month(df$datum, label = TRUE, abbr = TRUE)
+
+df_long3 <- df %>%
+  select(Month, R03, R06) %>%
+  pivot_longer(cols = c(R03, R06), 
+               names_to = "Drug_Type", values_to = "Sales")
+
+ggplot(df_long3, aes(x = Month, y = Sales, fill = Drug_Type)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+  labs(title = "Seasonal Sales Trends: Respiratory and Allergy Meds",
+       x = "Month", y = "Sales") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+Asthma_Drugs:
+
+Higher variability and sales overall.
+
+Peaks in winter and early spring (Dec–Mar), with December showing the highest sales.
+
+Suggests seasonal spikes potentially tied to cold/flu season, winter triggers, or increased respiratory infections.
+
+Allergy_Meds:
+
+More stable, lower median sales throughout the year.
+
+Slight uptick in spring (Mar–May) — potentially aligning with pollen/allergy season.
+
+Sales remain relatively flat compared to asthma drugs.
+
+Interpretation
+Asthma medication usage is strongly seasonal, with clear increases during colder months. This could be linked to:
+
+Respiratory infections
+
+Cold-induced asthma exacerbation
+
+Increased indoor allergens (e.g., dust, mold)
+
+Allergy medications show minor seasonal influence, possibly indicating:
+
+More consistent year-round use (chronic allergies)
+
+Mild seasonal variation with a small rise in spring due to environmental allergens like pollen.
+
+```{r}
+#Cluster Map
+df_cluster_input <- df %>%
+  select(M01AB, M01AE, N02BA, N02BE,
+         N05B, N05C, R03, R06) %>%
+  scale() %>%
+  as_tibble()
+
+set.seed(123)
+k_result <- kmeans(df_cluster_input, centers = 4, nstart = 25)
+df$cluster <- as.factor(k_result$cluster)
+
+df$total_sales <- rowSums(df[, c("M01AB", "M01AE", "N02BA", "N02BE",
+         "N05B", "N05C", "R03", "R06")])
+
+df$Cluster_Label <- recode(df$cluster,
+  "1" = "1 - Moderate Sales",
+  "2" = "2 - Low Sales",
+  "3" = "3 - High Sales",
+  "4" = "4 - Very Low Sales"
+)
+
+ggplot(df, aes(x = datum, y = total_sales, color = Cluster_Label)) +
+  geom_point(alpha = 0.6) +
+  labs(
+    title = "Clustered Days Based on Drug Use Profiles",
+    x = "Date", y = "Total Drug Sales", color = "Cluster"
+  ) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Cluster 3 (cyan/light blue):
+Represents high-sales days, likely corresponding to flu season spikes (e.g., winter months like Jan–Mar).
+
+These days could be driven by Paracetamol_Group or Asthma_Drugs increases.
+
+Interpretation: Likely high demand due to respiratory infections, flu outbreaks, or seasonal illness peaks.
+
+Cluster 1 (light red):
+Shows a moderate-high sales pattern, but not as extreme as Cluster 3.
+
+Possibly includes weekends or small public health events.
+
+Interpretation: Elevated baseline usage — maybe moderate seasonal triggers or OTC activity.
+
+Cluster 2 (light green):
+Appears around the median sales range with relatively stable values.
+
+Interpretation: Normal, steady-state drug usage. Possibly routine or chronic-use medication periods.
+
+Cluster 4 (purple):
+Clearly the lowest total sales cluster.
+
+Possibly off-season periods or days with low retail activity (e.g., holidays, reporting gaps, or weekends).
+
+Interpretation: Low-demand days — not much medication being purchased or dispensed.
+
+
+
+```{r}
+#Seasonal Sales Numbers = All Medications
+df_summary <- df %>%
+  group_by(cluster) %>%
+  summarise(across(
+    c(M01AB, M01AE, N02BA, N02BE,
+         N05B, N05C, R03, R06),
+    mean,
+    .names = "avg_{.col}"
+  ))
+
+print(df_summary)
+```
+Cluster: High Flu Season Days
+Paracetamol_Group has the highest average → Suggests cold/flu symptom treatment.
+
+Asthma_Drugs are also elevated → Flu can worsen asthma.
+
+Interpretation: Likely January–March. Respiratory illness peaks. OTC cold remedies dominate.
+
+Cluster: Mental Health Days
+
+Anxiety_Drugs and Sleep_Aids are the highest here.
+
+Pain meds like NSAIDs or Paracetamol are lower.
+
+Interpretation: Possibly stress-related spikes (e.g., late-year holidays or post-summer adjustment periods).
+
+Cluster: Baseline/Low Sales
+
+Most drug groups have their lowest averages.
+
+Interpretation: Quiet months like summer (June–August), with minimal illness and fewer prescriptions.
+
+Cluster: Steady Pain Relief
+
+Aspirin, NSAIDs, and Paracetamol show consistent, mid-level averages.
+
+Interpretation: Reflects days where pain and chronic condition management dominate.
+
+
+```{r}
+#Heat Maps = All Medications
+df_summary <- df %>%
+  group_by(Cluster_Label) %>%
+  summarise(across(
+    c(M01AB, M01AE, N02BA, N02BE,
+         N05B, N05C, R03, R06),
+    mean,
+    .names = "avg_{.col}"
+  ))
+
+df_heatmap <- df_summary %>%
+  pivot_longer(cols = starts_with("avg_"),
+               names_to = "Drug_Type",
+               values_to = "Avg_Sales") %>%
+  mutate(Drug_Type = str_remove(Drug_Type, "avg_"))
+
+ggplot(df_heatmap, aes(x = Drug_Type, y = Cluster_Label, fill = Avg_Sales)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  labs(
+    title = "Heatmap of Average Drug Sales by Cluster",
+    x = "Drug Type", y = "Cluster", fill = "Avg Sales"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+The heatmap reveals distinct usage patterns across drug categories segmented by sales intensity clusters:
+
+- **Cluster 3 – High Sales**  
+  This cluster shows the highest average drug sales, with a strong concentration in **Paracetamol_Group**. This pattern suggests flu or cold season spikes, likely during winter months. **Asthma_Drugs** and **Anxiety_Drugs** also show moderate elevation, possibly due to increased respiratory stress during colder seasons.
+
+- **Cluster 1 – Moderate Sales**  
+  Drug usage is more balanced in this cluster. **Anxiety_Drugs** stand out with higher average values compared to other clusters, potentially indicating general stress-related or chronic mental health demand. **Paracetamol_Group** also remains elevated, though not as intense as in Cluster 3.
+
+- **Cluster 2 – Low Sales**  
+  Sales levels drop for all drugs, though **Paracetamol_Group** maintains a modest presence. This cluster likely reflects regular days without major illness surges or seasonal effects.
+
+- **Cluster 4 – Very Low Sales**  
+  This cluster exhibits the lowest drug sales across all categories, suggesting minimal demand. These may correspond to weekends, holidays, or summer periods when illness and medication use typically decline.
+
+**Key Insight:**  
+Paracetamol dominates high-sales clusters, supporting its role as a first-line response for common illnesses. Anxiety and sleep medications peak during moderate usage periods, reflecting steady, non-seasonal demand. NSAID groups show consistent but low variation across clusters, implying their use is less tied to seasonal illness patterns.
+
+```{r}
+psych1 <- lm(data = df, N05B ~ N02BA + R06)
+ 
+summary(psych1)
+```
+
